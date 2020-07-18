@@ -12,6 +12,8 @@ var the_player:Node
 
 var peer_id_list:Array
 
+var cmd_mode = false
+
 func _ready():
 	get_tree().connect("network_peer_connected", self, "_on_network_peer_connected")
 	get_tree().connect("network_peer_disconnected", self, "_on_network_peer_disconnected")
@@ -24,8 +26,15 @@ func _input(event):
 	if the_player == null:
 		return
 	if event is InputEventMouseButton:
-		if event.pressed and event.button_index == BUTTON_LEFT:
+		if not cmd_mode and event.pressed and event.button_index == BUTTON_LEFT:
 			pause(false)
+
+func _unhandled_input(event):
+	if not cmd_mode and Input.is_action_just_pressed("ui_chat"):
+		cmd_mode = true
+		$Control/ChatPanel.visible = true
+		$Control/ChatPanel/LineEdit.grab_focus()
+		pause(true)
 
 func _process(delta):
 	if Input.is_action_just_pressed("ui_cancel"):
@@ -57,7 +66,8 @@ func create_main_player():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 func pause(v = true):
-	the_player.enable = not v
+	if the_player:
+		the_player.enable = not v
 	if v:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	else:
@@ -127,5 +137,15 @@ func _on_connect_failed():
 func _on_server_disconnected():
 	print("Disconnected from server!")
 
-
-
+func _on_LineEdit_text_entered(cmd:String):
+	cmd_mode = false
+	pause(false)
+	$Control/ChatPanel.visible = false
+	
+	if cmd.empty():
+		return
+	
+	if not $Control/ChatPanel/RichTextLabel.text.empty():
+		$Control/ChatPanel/RichTextLabel.text += "\n"
+	$Control/ChatPanel/RichTextLabel.text += cmd
+	$Control/ChatPanel/LineEdit.text = ""

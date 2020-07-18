@@ -22,5 +22,3 @@ transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 20.0164, 0, 0 )
 visible = false
 mesh = SubResource( 2 )
 material/0 = SubResource( 3 )
-
-[node name="StaticBody" type="StaticBody" parent="."]

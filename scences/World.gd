@@ -11,14 +11,19 @@ func _ready():
 		block_material = SpatialMaterial.new()
 		
 	register_blocks()
+	
 	block_material.albedo_texture = gen_texutre()
 	block_material.params_depth_draw_mode = SpatialMaterial.DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
+	
 	gen_chunck_data()
 	
 	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
 	$ChunkMeshInstance.mesh = mesh
 	mesh.surface_set_material(0, block_material)
 	$ChunkMeshInstance.transform.origin = Vector3(0, 0, 0)
+	
+	var chunck_collision = gen_chunck_collision_node(mesh)
+	$ChunkMeshInstance.add_child(chunck_collision)
 
 #------- Enums -------------
 enum BlockType{AIR, HALF_SOLID, SOLID}
@@ -360,6 +365,22 @@ func gen_mesh_from_chunck_data(data):
 					
 					
 	return mesh_tool.commit()
+
+func gen_chunck_collision_node(mesh:Mesh):
+	var shape = mesh.create_trimesh_shape()
+	if shape == null:
+		print("generate chunck collision fail!")
+		return
+	
+	var static_body = StaticBody.new()
+	static_body.name = "ChunckStaticBody"
+	
+	var collision_shape = CollisionShape.new()
+	static_body.add_child(collision_shape)
+	collision_shape.shape = shape
+	
+	return static_body
+	
 #------- RPCs -------------
 
 #------- Signals -------------

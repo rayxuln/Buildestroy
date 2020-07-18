@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=2]
+[gd_scene load_steps=6 format=2]
 
 [ext_resource path="res://scences/FPSFlyCameraController.gd" type="Script" id=1]
 [ext_resource path="res://icon.png" type="Texture" id=2]
@@ -8,6 +8,10 @@ mid_height = 2.389
 
 [sub_resource type="SpatialMaterial" id=2]
 albedo_texture = ExtResource( 2 )
+
+[sub_resource type="CapsuleShape" id=3]
+radius = 1.02708
+height = 2.29885
 
 [node name="MainPlayer" type="KinematicBody" groups=[
 "player",
@@ -27,4 +31,9 @@ material/0 = SubResource( 2 )
 [node name="SyncTimer" type="Timer" parent="."]
 wait_time = 0.01
 autostart = true
+
+[node name="CollisionShape" type="CollisionShape" parent="."]
+transform = Transform( 1, 0, 0, 0, -1.62921e-07, -1, 0, 1, -1.62921e-07, 0, -0.910512, 0 )
+shape = SubResource( 3 )
+disabled = true
 [connection signal="timeout" from="SyncTimer" to="." method="_on_SyncTimer_timeout"]
