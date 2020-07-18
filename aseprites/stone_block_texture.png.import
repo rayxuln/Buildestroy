@@ -2,15 +2,15 @@
 
 importer="texture"
 type="StreamTexture"
-path="res://.import/dirt_block_texture.png-f8eb3cfd081fa6fb99c93e6b900a0505.stex"
+path="res://.import/stone_block_texture.png-66d7105b4dc0d9ae2767690ac259f302.stex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://aseprites/dirt_block_texture.png"
-dest_files=[ "res://.import/dirt_block_texture.png-f8eb3cfd081fa6fb99c93e6b900a0505.stex" ]
+source_file="res://aseprites/stone_block_texture.png"
+dest_files=[ "res://.import/stone_block_texture.png-66d7105b4dc0d9ae2767690ac259f302.stex" ]
 
 [params]
 
@@ -19,11 +19,11 @@ compress/lossy_quality=0.7
 compress/hdr_mode=0
 compress/bptc_ldr=0
 compress/normal_map=0
-flags/repeat=2
+flags/repeat=0
 flags/filter=false
-flags/mipmaps=true
+flags/mipmaps=false
 flags/anisotropic=false
-flags/srgb=1
+flags/srgb=2
 process/fix_alpha_border=true
 process/premult_alpha=false
 process/HDR_as_SRGB=false

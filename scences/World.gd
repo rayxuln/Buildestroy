@@ -9,8 +9,10 @@ var chunck_data
 func _ready():
 	if block_material == null:
 		block_material = SpatialMaterial.new()
+		
 	register_blocks()
 	block_material.albedo_texture = gen_texutre()
+	block_material.params_depth_draw_mode = SpatialMaterial.DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
 	gen_chunck_data()
 	
 	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
@@ -22,16 +24,9 @@ func _ready():
 enum BlockType{AIR, HALF_SOLID, SOLID}
 
 #------- Methods -------------
-func register_blocks():
-	block_data["air"] = {"name": "air", "type": BlockType.AIR}
-	
+func gen_normal_solid_cube_block_uvs_data():
 	var su = 1.0/6.0
-	
-	block_data["dirt"] = {
-		"name": "dirt",
-		"type": BlockType.SOLID,
-		"tex": preload("res://aseprites/dirt_block_texture.png"),
-		"uvs": {
+	return {
 				"offset": Vector2.ZERO,
 				"scale_factor": Vector2(1, 1),
 				"up": [Vector2(0, 0), Vector2(su*1, 0), Vector2(su*1, 1), Vector2(0, 1)],
@@ -41,6 +36,22 @@ func register_blocks():
 				"front": [Vector2(su*4, 1), Vector2(su*4, 0), Vector2(su*5, 0), Vector2(su*5, 1)],
 				"back": [Vector2(su*5, 1), Vector2(su*5, 0), Vector2(su*6, 0), Vector2(su*6, 1)]
 			}
+
+func register_blocks():
+	block_data["air"] = {"name": "air", "type": BlockType.AIR}
+	
+	block_data["dirt"] = {
+		"name": "dirt",
+		"type": BlockType.SOLID,
+		"tex": preload("res://aseprites/dirt_block_texture.png"),
+		"uvs": gen_normal_solid_cube_block_uvs_data()
+		}
+	
+	block_data["stone"] = {
+		"name": "stone",
+		"type": BlockType.SOLID,
+		"tex": preload("res://aseprites/stone_block_texture.png"),
+		"uvs": gen_normal_solid_cube_block_uvs_data()
 		}
 
 func create_block(block_name, x, y, z):
@@ -55,17 +66,72 @@ func is_rect_overlap(r1:Rect2, r2:Rect2):
 			
 
 func gen_texutre():
+	var USED = 1
+	var UNUSED = 0
+	
 	var the_image = Image.new()
-	the_image.create(2048, 2048, false, Image.FORMAT_RGBA8)
+	var image_size = Vector2(2048, 2048)
+	the_image.create(image_size.x, image_size.y, false, Image.FORMAT_RGBA8)
+	
+	var tex_size = Vector2(6, 1)
+	var face_tex_size = Vector2(16, 16)
+	var unit_size = tex_size*face_tex_size
+	var units_num = Vector2(floor(image_size.x/unit_size.x), floor(image_size.y/unit_size.y))
+	
+	var units_used = []
+	units_used.resize(units_num.x)
+	for x in units_num.x:
+		var row = []
+		row.resize(units_num.y)
+		for y in units_num.y:
+			row[y] = UNUSED
+		units_used[x] = row
 	
 	the_image.fill(Color(0, 0, 0, 0))
 	
 	for bd in block_data.values():
 		if bd.has("tex"):
 			var tex:Texture = bd["tex"]
-			bd["uvs"]["scale_factor"] = Vector2(tex.get_width()/2048.0, tex.get_height()/2048.0)
+			var tw = tex.get_width()
+			var th = tex.get_height()
+			bd["uvs"]["scale_factor"] = Vector2(tw/image_size.x, th/image_size.y)
 			
-			the_image.blit_rect(tex.get_data(), Rect2(0, 0, tex.get_width(), tex.get_height()), Vector2.ZERO)
+			# calc how many space it needs
+			var ts = Vector2(ceil(tw/unit_size.x), ceil(th/unit_size.y))
+#			print(bd["name"], " ts:", ts)
+			
+			# get available position
+			var tpos = Vector2.ZERO # in unit
+			var found_tpos = false
+			for x in units_num.x:
+				for y in units_num.y:
+					if units_used[x][y] == UNUSED:
+						var available = true
+						# try to put it in
+						for tx in ts.x:
+							for ty in ts.y:
+#								print(bd["name"], " tx:", tx, " ty:", ty)
+								if not is_in_range(x+tx, 0, units_num.x) or not is_in_range(y+ty, 0, units_num.y) or units_used[x+tx][y+ty] == USED:
+									available = false
+									break
+						if not available:
+							continue
+						found_tpos = true
+						units_used[x][y] = USED
+						tpos = Vector2(x, y)
+						break
+				if found_tpos:
+					break
+			if not found_tpos:
+				print("Can't found a place for tex:" + bd["name"])
+				continue
+			
+#			print("gen tex for " + bd["name"] + " at ", tpos)
+			
+			# calc uv pos
+			bd["uvs"]["offset"] = Vector2((tpos.x * unit_size.x)/image_size.x, (tpos.y * unit_size.y)/image_size.y)
+			
+			the_image.blit_rect(tex.get_data(), Rect2(0, 0, tw, th), tpos * unit_size)
 	
 	var tex = ImageTexture.new()
 	tex.create_from_image(the_image)
@@ -86,7 +152,13 @@ func gen_chunck_data():
 	
 	for x in chunck_size.x:
 		for z in chunck_size.z:
-			chunck_data[x][0][z] = create_block("dirt", x, 0, z)
+			chunck_data[x][0][z] = create_block("stone", x, 0, z)
+	
+	for x in chunck_size.x:
+		for z in chunck_size.z:
+			chunck_data[x][1][z] = create_block("dirt", x, 1, z)
+	
+	chunck_data[4][2][11] = create_block("stone", 4, 2, 11) 
 
 func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=true, back=true):
 	var mesh_tool = SurfaceTool.new()
@@ -277,14 +349,16 @@ func gen_mesh_from_chunck_data(data):
 					trans.origin = Vector3(x, y, z)
 					
 					var block_mesh = gen_cube_mesh(block_data[block["name"]],
-												is_not_solid_block(x, y+1, z),
-												is_not_solid_block(x, y-1, z),
-												is_not_solid_block(x-1, y, z),
-												is_not_solid_block(x+1, y, z),
-												is_not_solid_block(x, y, z+1),
-												is_not_solid_block(x, y, z-1))
-						
+													is_not_solid_block(x, y+1, z),
+													is_not_solid_block(x, y-1, z),
+													is_not_solid_block(x-1, y, z),
+													is_not_solid_block(x+1, y, z),
+													is_not_solid_block(x, y, z+1),
+													is_not_solid_block(x, y, z-1))
+													
 					mesh_tool.append_from(block_mesh, 0, trans)
+					
+					
 	return mesh_tool.commit()
 #------- RPCs -------------
 
