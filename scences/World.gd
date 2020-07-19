@@ -166,6 +166,9 @@ func gen_chunck_data():
 	chunck_data[4][2][11] = create_block("stone", 4, 2, 11) 
 
 func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=true, back=true):
+	if not up and not down and not left and not right and not front and not back:
+		return null
+	
 	var mesh_tool = SurfaceTool.new()
 	mesh_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var uvs = block_data["uvs"]
@@ -360,8 +363,8 @@ func gen_mesh_from_chunck_data(data):
 													is_not_solid_block(x+1, y, z),
 													is_not_solid_block(x, y, z+1),
 													is_not_solid_block(x, y, z-1))
-													
-					mesh_tool.append_from(block_mesh, 0, trans)
+					if block_mesh:
+						mesh_tool.append_from(block_mesh, 0, trans)
 					
 					
 	return mesh_tool.commit()

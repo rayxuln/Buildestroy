@@ -25,6 +25,40 @@ func _on_peer_id_get():
 func _ready():
 	normal_fov = $Camera.fov
 	target_fov = normal_fov
+	
+	var mesh_tool = SurfaceTool.new()
+	mesh_tool.begin(Mesh.PRIMITIVE_LINES)
+	mesh_tool.add_vertex(Vector3(0, 0, 0))#0
+	mesh_tool.add_vertex(Vector3(1, 0, 0))#1
+	mesh_tool.add_vertex(Vector3(1, 1, 0))#2
+	mesh_tool.add_vertex(Vector3(0, 1, 0))#3
+	mesh_tool.add_vertex(Vector3(0, 0, 1))#4
+	mesh_tool.add_vertex(Vector3(1, 0, 1))#5
+	mesh_tool.add_vertex(Vector3(1, 1, 1))#6
+	mesh_tool.add_vertex(Vector3(0, 1, 1))#7
+	#up
+	mesh_tool.add_index(3);mesh_tool.add_index(7)
+	mesh_tool.add_index(6);mesh_tool.add_index(2)
+	#down
+	mesh_tool.add_index(1);mesh_tool.add_index(5)
+	mesh_tool.add_index(4);mesh_tool.add_index(0)
+	#front
+	mesh_tool.add_index(4);mesh_tool.add_index(5)
+	mesh_tool.add_index(5);mesh_tool.add_index(6)
+	mesh_tool.add_index(6);mesh_tool.add_index(7)
+	mesh_tool.add_index(7);mesh_tool.add_index(4)
+	#back
+	mesh_tool.add_index(0);mesh_tool.add_index(1)
+	mesh_tool.add_index(1);mesh_tool.add_index(2)
+	mesh_tool.add_index(2);mesh_tool.add_index(3)
+	mesh_tool.add_index(3);mesh_tool.add_index(0)
+	$BlockSelectionWireframeMesh.mesh = mesh_tool.commit()
+	var mat = SpatialMaterial.new()
+	mat.flags_unshaded = true
+	mat.params_cull_mode = SpatialMaterial.CULL_DISABLED
+	mat.params_line_width = 2
+	mat.albedo_color = Color.black
+	$BlockSelectionWireframeMesh.mesh.surface_set_material(0, mat)
 
 func _input(event):
 	if not enable:
@@ -47,6 +81,7 @@ func _process(delta):
 		is_sprint = false
 		target_fov = normal_fov
 	
+	$Cursor.position = get_viewport().size/2
 	$Camera.fov = lerp($Camera.fov, target_fov, 0.3)
 
 func _physics_process(delta):
@@ -60,6 +95,20 @@ func _physics_process(delta):
 	
 	velocity = (transform.basis.x * input_vec.x + transform.basis.z * input_vec.z) * move_speed * (sprint_factor if is_sprint else 1) + Vector3.UP * input_vec.y * fly_speed
 	move_and_slide(velocity, Vector3.UP)
+	
+	var space_state = get_world().direct_space_state
+	var ray_from = $Camera.project_ray_origin($Cursor.global_position)
+	var ray_to = ray_from+$Camera.project_ray_normal($Cursor.global_position) * 5
+	var ray_cast_res:Dictionary = space_state.intersect_ray(ray_from, ray_to, [self])
+	
+	if not ray_cast_res.empty():
+		var cpos = ray_cast_res.position
+		var cnor = ray_cast_res.normal
+		print(cpos, "|", cnor)
+		$Ball.global_transform.origin = cpos
+		$BlockSelectionWireframeMesh.global_transform = Transform.IDENTITY
+		$BlockSelectionWireframeMesh.global_transform.origin = cpos
+
 	
 #--------- Methods ------------------
 
