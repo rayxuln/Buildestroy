@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=2]
+[gd_scene load_steps=17 format=2]
 
 [ext_resource path="res://scences/FPSFlyCameraController.gd" type="Script" id=1]
 [ext_resource path="res://icon.png" type="Texture" id=2]
@@ -14,13 +14,88 @@ albedo_texture = ExtResource( 2 )
 radius = 0.620085
 height = 1.7873
 
+[sub_resource type="Animation" id=14]
+resource_name = "hand_idle"
+tracks/0/type = "value"
+tracks/0/path = NodePath("FirstPersonViewport/Hand:translation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/keys = {
+"times": PoolRealArray( 0 ),
+"transitions": PoolRealArray( 1 ),
+"update": 0,
+"values": [ Vector3( 0.504359, -0.392724, -0.554994 ) ]
+}
+tracks/1/type = "value"
+tracks/1/path = NodePath("FirstPersonViewport/Hand:rotation_degrees")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/keys = {
+"times": PoolRealArray( 0 ),
+"transitions": PoolRealArray( 1 ),
+"update": 0,
+"values": [ Vector3( 0, 0, 0 ) ]
+}
+
+[sub_resource type="Animation" id=15]
+resource_name = "hand_swing"
+length = 0.2
+step = 0.05
+tracks/0/type = "value"
+tracks/0/path = NodePath("FirstPersonViewport/Hand:translation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/keys = {
+"times": PoolRealArray( 0, 0.05, 0.1, 0.2 ),
+"transitions": PoolRealArray( 1, 1, 1, 1 ),
+"update": 0,
+"values": [ Vector3( 0.504359, -0.392724, -0.554994 ), Vector3( 0.504359, -0.19948, -0.554994 ), Vector3( 0.207763, -0.19948, -0.382935 ), Vector3( 0.504359, -0.392724, -0.554994 ) ]
+}
+tracks/1/type = "value"
+tracks/1/path = NodePath("FirstPersonViewport/Hand:rotation_degrees")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/keys = {
+"times": PoolRealArray( 0, 0.05, 0.1, 0.2 ),
+"transitions": PoolRealArray( 1, 1, 1, 1 ),
+"update": 0,
+"values": [ Vector3( 0, 0, 0 ), Vector3( 21.556, 0, 0 ), Vector3( -4.81615, 40.3431, -4.12251 ), Vector3( 0, 0, 0 ) ]
+}
+
+[sub_resource type="AnimationNodeAnimation" id=7]
+animation = "hand_idle"
+
+[sub_resource type="AnimationNodeAnimation" id=8]
+animation = "hand_swing"
+
+[sub_resource type="AnimationNodeStateMachineTransition" id=9]
+
+[sub_resource type="AnimationNodeStateMachineTransition" id=10]
+switch_mode = 2
+auto_advance = true
+
+[sub_resource type="AnimationNodeStateMachine" id=11]
+states/hand_idle/node = SubResource( 7 )
+states/hand_idle/position = Vector2( 260, 56 )
+states/hand_swing/node = SubResource( 8 )
+states/hand_swing/position = Vector2( 554, 56 )
+transitions = [ "hand_idle", "hand_swing", SubResource( 9 ), "hand_swing", "hand_idle", SubResource( 10 ) ]
+start_node = "hand_idle"
+
+[sub_resource type="AnimationNodeStateMachinePlayback" id=12]
+
 [sub_resource type="CubeMesh" id=4]
 
-[sub_resource type="SpatialMaterial" id=5]
-albedo_color = Color( 1, 0.0941176, 0.0941176, 1 )
-
-[sub_resource type="SphereMesh" id=6]
-material = SubResource( 5 )
+[sub_resource type="ViewportTexture" id=13]
+viewport_path = NodePath("FirstPersonViewport")
 
 [node name="MainPlayer" type="KinematicBody" groups=[
 "player",
@@ -28,7 +103,7 @@ material = SubResource( 5 )
 script = ExtResource( 1 )
 
 [node name="Camera" type="Camera" parent="."]
-cull_mask = 1048573
+cull_mask = 1048569
 far = 1000.0
 
 [node name="Head" type="MeshInstance" parent="."]
@@ -46,20 +121,39 @@ transform = Transform( 1, 0, 0, 0, -1.62921e-07, -1, 0, 1, -1.62921e-07, 0, -0.9
 shape = SubResource( 3 )
 disabled = true
 
-[node name="Hand" type="MeshInstance" parent="."]
-transform = Transform( 0.139025, 0, 0, 0, 0.136353, 0, 0, 0, 0.35864, 0.504359, -0.392724, -0.554994 )
-mesh = SubResource( 4 )
-material/0 = null
-
 [node name="Cursor" type="Sprite" parent="."]
 position = Vector2( 491.591, 313.125 )
 texture = ExtResource( 3 )
 
-[node name="Ball" type="MeshInstance" parent="."]
-transform = Transform( 0.1, 0, 0, 0, 0.1, 0, 0, 0, 0.01, 0, 0, -10.7773 )
-mesh = SubResource( 6 )
-material/0 = null
-
 [node name="BlockSelectionWireframeMesh" type="MeshInstance" parent="."]
 cast_shadow = 0
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+anims/hand_idle = SubResource( 14 )
+anims/hand_swing = SubResource( 15 )
+
+[node name="AnimationTree" type="AnimationTree" parent="."]
+tree_root = SubResource( 11 )
+anim_player = NodePath("../AnimationPlayer")
+active = true
+parameters/playback = SubResource( 12 )
+
+[node name="FirstPersonViewport" type="Viewport" parent="."]
+size = Vector2( 1, 1 )
+transparent_bg = true
+
+[node name="Hand" type="MeshInstance" parent="FirstPersonViewport"]
+transform = Transform( 0.139025, 0, 0, 0, 0.136353, 0, 0, 0, 0.35864, 0.504359, -0.392724, -0.554994 )
+layers = 4
+mesh = SubResource( 4 )
+material/0 = null
+
+[node name="Camera" type="Camera" parent="FirstPersonViewport"]
+cull_mask = 2147483652
+current = true
+
+[node name="FirstPersonViewSprite" type="Sprite" parent="."]
+texture = SubResource( 13 )
+centered = false
+flip_v = true
 [connection signal="timeout" from="SyncTimer" to="." method="_on_SyncTimer_timeout"]

@@ -22,6 +22,8 @@ func _on_peer_id_set(v):
 func _on_peer_id_get():
 	return peer_id
 
+onready var anim_playback = $AnimationTree["parameters/playback"]	
+
 func _ready():
 	normal_fov = $Camera.fov
 	target_fov = normal_fov
@@ -59,6 +61,8 @@ func _ready():
 	mat.params_line_width = 2
 	mat.albedo_color = Color.black
 	$BlockSelectionWireframeMesh.mesh.surface_set_material(0, mat)
+	
+	$FirstPersonViewport.size = get_viewport().size
 
 func _input(event):
 	if not enable:
@@ -81,6 +85,12 @@ func _process(delta):
 		is_sprint = false
 		target_fov = normal_fov
 	
+	if Input.is_action_just_pressed("destroy"):
+		anim_playback.travel("hand_swing")
+	
+	if Input.is_action_just_pressed("build"):
+		anim_playback.travel("hand_swing")
+	
 	$Cursor.position = get_viewport().size/2
 	$Camera.fov = lerp($Camera.fov, target_fov, 0.3)
 
@@ -101,13 +111,23 @@ func _physics_process(delta):
 	var ray_to = ray_from+$Camera.project_ray_normal($Cursor.global_position) * 5
 	var ray_cast_res:Dictionary = space_state.intersect_ray(ray_from, ray_to, [self])
 	
+	$BlockSelectionWireframeMesh.visible = false
 	if not ray_cast_res.empty():
 		var cpos = ray_cast_res.position
 		var cnor = ray_cast_res.normal
-		print(cpos, "|", cnor)
-		$Ball.global_transform.origin = cpos
-		$BlockSelectionWireframeMesh.global_transform = Transform.IDENTITY
-		$BlockSelectionWireframeMesh.global_transform.origin = cpos
+		
+		var block = get_parent().get_block_by_world_position_and_face_normal(cpos, cnor)
+		
+		if block and get_parent().block_data[block.name].type == get_parent().BlockType.SOLID:
+			$BlockSelectionWireframeMesh.global_transform = Transform.IDENTITY
+			$BlockSelectionWireframeMesh.global_transform.origin = block.pos
+			$BlockSelectionWireframeMesh.visible = true
+			
+			if Input.is_action_just_pressed("destroy"):
+				get_parent().destroy_block(block.pos)
+			
+			if Input.is_action_just_pressed("build"):
+				get_parent().build_block(block.pos+cnor, "stone")
 
 	
 #--------- Methods ------------------

@@ -9,12 +9,12 @@ var chunck_data
 func _ready():
 	if block_material == null:
 		block_material = SpatialMaterial.new()
+		block_material.params_depth_draw_mode = SpatialMaterial.DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
 		
 	register_blocks()
 	
 	block_material.albedo_texture = gen_texutre()
-	block_material.params_depth_draw_mode = SpatialMaterial.DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
-	
+
 	gen_chunck_data()
 	
 	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
@@ -60,7 +60,7 @@ func register_blocks():
 		}
 
 func create_block(block_name, x, y, z):
-	return {name=block_name, pos=Vector3(x, y, z)}
+	return {"name": block_name, "pos": Vector3(x, y, z)}
 	
 
 func is_rect_overlap(r1:Rect2, r2:Rect2):
@@ -334,8 +334,11 @@ func is_in_range(x, min_x, max_x, closed = false):
 		return x >= min_x and x < max_x
 	return x >= min_x and x <= max_x
 
-func chunck_data_get_block(x, y, z):
-	if not is_in_range(x, 0,chunck_size.x) or not is_in_range(y, 0,chunck_size.y) or not is_in_range(z, 0,chunck_size.z):
+func is_valid_position_in_chunck(pos:Vector3):
+	return is_in_range(pos.x, 0,chunck_size.x) and is_in_range(pos.y, 0,chunck_size.y) and is_in_range(pos.z, 0,chunck_size.z)
+
+func chunck_data_get_block(x:int, y:int, z:int):
+	if not is_valid_position_in_chunck(Vector3(x, y, z)):
 		return null
 	return chunck_data[x][y][z]
 
@@ -380,9 +383,40 @@ func gen_chunck_collision_node(mesh:Mesh):
 	
 	var collision_shape = CollisionShape.new()
 	static_body.add_child(collision_shape)
+	collision_shape.name = "Shape"
 	collision_shape.shape = shape
 	
 	return static_body
+
+func update_chunck_mesh():
+	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
+	$ChunkMeshInstance.mesh = mesh
+	mesh.surface_set_material(0, block_material)
+
+func update_chunck_collision():
+	var shape = $ChunkMeshInstance.mesh.create_trimesh_shape()
+	if shape == null:
+		print("generate chunck collision fail!")
+		return
+	$ChunkMeshInstance.get_node("ChunckStaticBody/Shape").shape = shape
+
+func set_block(pos_in_chunck:Vector3, block_name):
+	if not is_valid_position_in_chunck(pos_in_chunck):
+		return
+	chunck_data[pos_in_chunck.x][pos_in_chunck.y][pos_in_chunck.z] = create_block(block_name, pos_in_chunck.x, pos_in_chunck.y, pos_in_chunck.z)
+	
+	update_chunck_mesh()
+	update_chunck_collision()
+
+func destroy_block(pos_in_chunck:Vector3):
+	set_block(pos_in_chunck, "air")
+
+func build_block(pos_in_chunck:Vector3, block_name):
+	set_block(pos_in_chunck, block_name)
+
+func get_block_by_world_position_and_face_normal(pos:Vector3, nor:Vector3):
+	pos -= nor * 0.01
+	return chunck_data_get_block(pos.x, pos.y, pos.z)
 	
 #------- RPCs -------------
 
