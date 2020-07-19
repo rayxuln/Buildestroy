@@ -1,13 +1,27 @@
-[gd_scene load_steps=3 format=2]
+[gd_scene load_steps=4 format=2]
 
 [ext_resource path="res://scences/World.gd" type="Script" id=1]
 
 [sub_resource type="SpatialMaterial" id=1]
-flags_transparent = true
-params_depth_draw_mode = 3
+
+[sub_resource type="SphereMesh" id=2]
 
 [node name="World" type="Spatial"]
 script = ExtResource( 1 )
 block_material = SubResource( 1 )
 
 [node name="ChunkMeshInstance" type="MeshInstance" parent="."]
+
+[node name="OmniLight" type="OmniLight" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 2.83447, 9.625 )
+light_energy = 2.8
+light_indirect_energy = 3.05
+light_bake_mode = 0
+shadow_enabled = true
+omni_range = 9.7
+omni_attenuation = 0.574349
+
+[node name="LightVisilized" type="MeshInstance" parent="."]
+transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 3, 8 )
+mesh = SubResource( 2 )
+material/0 = null

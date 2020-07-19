@@ -14,10 +14,10 @@ albedo_texture = ExtResource( 2 )
 radius = 0.620085
 height = 1.7873
 
-[sub_resource type="Animation" id=14]
+[sub_resource type="Animation" id=4]
 resource_name = "hand_idle"
 tracks/0/type = "value"
-tracks/0/path = NodePath("FirstPersonViewport/Hand:translation")
+tracks/0/path = NodePath("Hand:translation")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/imported = false
@@ -29,7 +29,7 @@ tracks/0/keys = {
 "values": [ Vector3( 0.504359, -0.392724, -0.554994 ) ]
 }
 tracks/1/type = "value"
-tracks/1/path = NodePath("FirstPersonViewport/Hand:rotation_degrees")
+tracks/1/path = NodePath("Hand:rotation_degrees")
 tracks/1/interp = 1
 tracks/1/loop_wrap = true
 tracks/1/imported = false
@@ -41,12 +41,12 @@ tracks/1/keys = {
 "values": [ Vector3( 0, 0, 0 ) ]
 }
 
-[sub_resource type="Animation" id=15]
+[sub_resource type="Animation" id=5]
 resource_name = "hand_swing"
 length = 0.2
 step = 0.05
 tracks/0/type = "value"
-tracks/0/path = NodePath("FirstPersonViewport/Hand:translation")
+tracks/0/path = NodePath("Hand:translation")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/imported = false
@@ -58,7 +58,7 @@ tracks/0/keys = {
 "values": [ Vector3( 0.504359, -0.392724, -0.554994 ), Vector3( 0.504359, -0.19948, -0.554994 ), Vector3( 0.207763, -0.19948, -0.382935 ), Vector3( 0.504359, -0.392724, -0.554994 ) ]
 }
 tracks/1/type = "value"
-tracks/1/path = NodePath("FirstPersonViewport/Hand:rotation_degrees")
+tracks/1/path = NodePath("Hand:rotation_degrees")
 tracks/1/interp = 1
 tracks/1/loop_wrap = true
 tracks/1/imported = false
@@ -70,29 +70,29 @@ tracks/1/keys = {
 "values": [ Vector3( 0, 0, 0 ), Vector3( 21.556, 0, 0 ), Vector3( -4.81615, 40.3431, -4.12251 ), Vector3( 0, 0, 0 ) ]
 }
 
-[sub_resource type="AnimationNodeAnimation" id=7]
+[sub_resource type="AnimationNodeAnimation" id=6]
 animation = "hand_idle"
 
-[sub_resource type="AnimationNodeAnimation" id=8]
+[sub_resource type="AnimationNodeAnimation" id=7]
 animation = "hand_swing"
 
-[sub_resource type="AnimationNodeStateMachineTransition" id=9]
+[sub_resource type="AnimationNodeStateMachineTransition" id=8]
 
-[sub_resource type="AnimationNodeStateMachineTransition" id=10]
+[sub_resource type="AnimationNodeStateMachineTransition" id=9]
 switch_mode = 2
 auto_advance = true
 
-[sub_resource type="AnimationNodeStateMachine" id=11]
-states/hand_idle/node = SubResource( 7 )
+[sub_resource type="AnimationNodeStateMachine" id=10]
+states/hand_idle/node = SubResource( 6 )
 states/hand_idle/position = Vector2( 260, 56 )
-states/hand_swing/node = SubResource( 8 )
+states/hand_swing/node = SubResource( 7 )
 states/hand_swing/position = Vector2( 554, 56 )
-transitions = [ "hand_idle", "hand_swing", SubResource( 9 ), "hand_swing", "hand_idle", SubResource( 10 ) ]
+transitions = [ "hand_idle", "hand_swing", SubResource( 8 ), "hand_swing", "hand_idle", SubResource( 9 ) ]
 start_node = "hand_idle"
 
-[sub_resource type="AnimationNodeStateMachinePlayback" id=12]
+[sub_resource type="AnimationNodeStateMachinePlayback" id=11]
 
-[sub_resource type="CubeMesh" id=4]
+[sub_resource type="CubeMesh" id=12]
 
 [sub_resource type="ViewportTexture" id=13]
 viewport_path = NodePath("FirstPersonViewport")
@@ -129,24 +129,24 @@ texture = ExtResource( 3 )
 cast_shadow = 0
 
 [node name="AnimationPlayer" type="AnimationPlayer" parent="."]
-anims/hand_idle = SubResource( 14 )
-anims/hand_swing = SubResource( 15 )
+anims/hand_idle = SubResource( 4 )
+anims/hand_swing = SubResource( 5 )
 
 [node name="AnimationTree" type="AnimationTree" parent="."]
-tree_root = SubResource( 11 )
+tree_root = SubResource( 10 )
 anim_player = NodePath("../AnimationPlayer")
 active = true
-parameters/playback = SubResource( 12 )
+parameters/playback = SubResource( 11 )
+
+[node name="Hand" type="MeshInstance" parent="."]
+transform = Transform( 0.139025, 0, 0, 0, 0.136353, 0, 0, 0, 0.35864, 0.504359, -0.392724, -0.554994 )
+layers = 4
+mesh = SubResource( 12 )
+material/0 = null
 
 [node name="FirstPersonViewport" type="Viewport" parent="."]
 size = Vector2( 1, 1 )
 transparent_bg = true
-
-[node name="Hand" type="MeshInstance" parent="FirstPersonViewport"]
-transform = Transform( 0.139025, 0, 0, 0, 0.136353, 0, 0, 0, 0.35864, 0.504359, -0.392724, -0.554994 )
-layers = 4
-mesh = SubResource( 4 )
-material/0 = null
 
 [node name="Camera" type="Camera" parent="FirstPersonViewport"]
 cull_mask = 2147483652

@@ -3,13 +3,20 @@ extends Spatial
 export(Dictionary) var block_data:Dictionary
 export(SpatialMaterial) var block_material:SpatialMaterial
 
-var chunck_size = Vector3(16, 256, 16)
+const chunck_size = Vector3(16, 256, 16)
 var chunck_data
+
+# multi-thread update mesh
+var expect_thread_id = -1
+var ready_mesh:ArrayMesh = null
+var ready_mesh_thread_id:int = -1
+var update_mesh_mutex:Mutex = Mutex.new()
+var thread_id_cnt = 0
+var threads:Array = []
 
 func _ready():
 	if block_material == null:
 		block_material = SpatialMaterial.new()
-		block_material.params_depth_draw_mode = SpatialMaterial.DEPTH_DRAW_ALPHA_OPAQUE_PREPASS
 		
 	register_blocks()
 	
@@ -17,14 +24,25 @@ func _ready():
 
 	gen_chunck_data()
 	
-	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
+	var mesh:ArrayMesh = gen_mesh_from_chunck_data()
 	$ChunkMeshInstance.mesh = mesh
 	mesh.surface_set_material(0, block_material)
 	$ChunkMeshInstance.transform.origin = Vector3(0, 0, 0)
 	
 	var chunck_collision = gen_chunck_collision_node(mesh)
 	$ChunkMeshInstance.add_child(chunck_collision)
+	
+func _process(delta):
+	if ready_mesh != null and $ChunkMeshInstance.mesh != ready_mesh:
+		$ChunkMeshInstance.mesh = ready_mesh
+		ready_mesh.surface_set_material(0, block_material)
+		update_chunck_collision()
+		ready_mesh = null
 
+func _exit_tree():
+	for t in threads:
+		if t is Thread:
+			t.wait_to_finish()
 #------- Enums -------------
 enum BlockType{AIR, HALF_SOLID, SOLID}
 
@@ -165,31 +183,28 @@ func gen_chunck_data():
 	
 	chunck_data[4][2][11] = create_block("stone", 4, 2, 11) 
 
-func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=true, back=true):
+func add_cube_mesh(mesh_tool:SurfaceTool, trans:Transform, base_index, block_data, up=true, down=true, left=true, right=true, front=true, back=true):
 	if not up and not down and not left and not right and not front and not back:
-		return null
+		return base_index
 	
-	var mesh_tool = SurfaceTool.new()
-	mesh_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var uvs = block_data["uvs"]
 	var sf = uvs["scale_factor"]
-	var base_index = 0
 	if up:#0
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["up"][0]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
 		
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["up"][1]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
 		
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["up"][2]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
 		
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["up"][3]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
 		
 		mesh_tool.add_index(base_index+0)
 		mesh_tool.add_index(base_index+1)
@@ -203,24 +218,24 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 	if down:#4
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["down"][0]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 0))
-		
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
+
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["down"][1]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 0))
-		
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
+
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["down"][2]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 1))
-		
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
+
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["down"][3]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 1))
-		
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
+
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+1)
 		mesh_tool.add_index(base_index+0)
-		
+
 		mesh_tool.add_index(base_index+3)
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+0)
@@ -228,19 +243,19 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 	if left:#8
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["left"][0]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["left"][1]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["left"][2]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["left"][3]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
 
 		mesh_tool.add_index(base_index+0)
 		mesh_tool.add_index(base_index+1)
@@ -249,24 +264,24 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 		mesh_tool.add_index(base_index+1)
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+3)
-		
+
 		base_index += 4
 	if right:#12
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["right"][0]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["right"][1]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["right"][2]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["right"][3]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
 
 		mesh_tool.add_index(base_index+3)
 		mesh_tool.add_index(base_index+1)
@@ -275,24 +290,24 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 		mesh_tool.add_index(base_index+3)
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+1)
-		
+
 		base_index += 4
 	if front:#16
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["front"][0]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["front"][1]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["front"][2]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["front"][3]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 1))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
 
 		mesh_tool.add_index(base_index+0)
 		mesh_tool.add_index(base_index+1)
@@ -301,24 +316,24 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 		mesh_tool.add_index(base_index+1)
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+3)
-		
+
 		base_index += 4
 	if back:#20
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["back"][0]*sf)
-		mesh_tool.add_vertex(Vector3(0, 0, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["back"][1]*sf)
-		mesh_tool.add_vertex(Vector3(0, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["back"][2]*sf)
-		mesh_tool.add_vertex(Vector3(1, 1, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
 
 		mesh_tool.add_color(Color.white)
 		mesh_tool.add_uv(uvs["offset"]+uvs["back"][3]*sf)
-		mesh_tool.add_vertex(Vector3(1, 0, 0))
+		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
 
 		mesh_tool.add_index(base_index+3)
 		mesh_tool.add_index(base_index+1)
@@ -327,7 +342,10 @@ func gen_cube_mesh(block_data, up=true, down=true, left=true, right=true, front=
 		mesh_tool.add_index(base_index+3)
 		mesh_tool.add_index(base_index+2)
 		mesh_tool.add_index(base_index+1)
-	return mesh_tool.commit()
+		
+		base_index += 4
+	return base_index
+
 
 func is_in_range(x, min_x, max_x, closed = false):
 	if not closed:
@@ -348,26 +366,24 @@ func is_not_solid_block(x, y, z):
 		return true
 	return block_data[res["name"]]["type"] != BlockType.SOLID
 
-func gen_mesh_from_chunck_data(data):
+func gen_mesh_from_chunck_data():
 	var mesh_tool = SurfaceTool.new()
 	mesh_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var trans = Transform.IDENTITY
-	for x in data.size():
-		for y in data[x].size():
-			for z in data[x][y].size():
+	var base_index = 0
+	for x in chunck_size.x:
+		for y in chunck_size.y:
+			for z in chunck_size.z:
 				var block = chunck_data_get_block(x, y, z)
 				if block != null and block["name"] != "air":
 					trans.origin = Vector3(x, y, z)
-					
-					var block_mesh = gen_cube_mesh(block_data[block["name"]],
-													is_not_solid_block(x, y+1, z),
-													is_not_solid_block(x, y-1, z),
-													is_not_solid_block(x-1, y, z),
-													is_not_solid_block(x+1, y, z),
-													is_not_solid_block(x, y, z+1),
-													is_not_solid_block(x, y, z-1))
-					if block_mesh:
-						mesh_tool.append_from(block_mesh, 0, trans)
+					base_index = add_cube_mesh(mesh_tool, trans, base_index, block_data[block["name"]],
+																		is_not_solid_block(x, y+1, z),
+																		is_not_solid_block(x, y-1, z),
+																		is_not_solid_block(x-1, y, z),
+																		is_not_solid_block(x+1, y, z),
+																		is_not_solid_block(x, y, z+1),
+																		is_not_solid_block(x, y, z-1))
 					
 					
 	return mesh_tool.commit()
@@ -389,9 +405,21 @@ func gen_chunck_collision_node(mesh:Mesh):
 	return static_body
 
 func update_chunck_mesh():
-	var mesh:ArrayMesh = gen_mesh_from_chunck_data(chunck_data)
-	$ChunkMeshInstance.mesh = mesh
-	mesh.surface_set_material(0, block_material)
+	ready_mesh_thread_id = thread_id_cnt
+	update_mesh_mutex.lock()
+	ready_mesh = null
+	update_mesh_mutex.unlock()
+	var t = Thread.new()
+	t.start(self, "_thread_update_chunck_mesh", thread_id_cnt)
+	thread_id_cnt += 1
+	threads.append(t)
+
+func _thread_update_chunck_mesh(thread_id):
+	var mesh:ArrayMesh = gen_mesh_from_chunck_data()
+	if ready_mesh_thread_id == thread_id:
+		update_mesh_mutex.lock()
+		ready_mesh = mesh
+		update_mesh_mutex.unlock()
 
 func update_chunck_collision():
 	var shape = $ChunkMeshInstance.mesh.create_trimesh_shape()
@@ -406,7 +434,6 @@ func set_block(pos_in_chunck:Vector3, block_name):
 	chunck_data[pos_in_chunck.x][pos_in_chunck.y][pos_in_chunck.z] = create_block(block_name, pos_in_chunck.x, pos_in_chunck.y, pos_in_chunck.z)
 	
 	update_chunck_mesh()
-	update_chunck_collision()
 
 func destroy_block(pos_in_chunck:Vector3):
 	set_block(pos_in_chunck, "air")

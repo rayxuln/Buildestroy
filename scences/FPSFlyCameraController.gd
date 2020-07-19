@@ -3,7 +3,7 @@ extends KinematicBody
 export(float) var mouse_sensity = 1
 const MOUSE_SENSITY_CORRECTION_FACTOR = 0.01
 export(float) var mouse_max_rotate_x = 65
-export(float) var mouse_min_rotate_x = -70
+export(float) var mouse_min_rotate_x = -90
 export(float) var move_speed = 2
 export(float) var sprint_factor = 2
 export(float) var sprint_camera_fov_factor = 1.14
@@ -63,6 +63,7 @@ func _ready():
 	$BlockSelectionWireframeMesh.mesh.surface_set_material(0, mat)
 	
 	$FirstPersonViewport.size = get_viewport().size
+	$FirstPersonViewport.world = get_viewport().world
 
 func _input(event):
 	if not enable:
@@ -93,6 +94,8 @@ func _process(delta):
 	
 	$Cursor.position = get_viewport().size/2
 	$Camera.fov = lerp($Camera.fov, target_fov, 0.3)
+	
+	$FirstPersonViewport/Camera.global_transform = $Camera.global_transform
 
 func _physics_process(delta):
 	if not enable:
