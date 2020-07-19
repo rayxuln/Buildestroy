@@ -158,7 +158,7 @@ func gen_texutre():
 	
 	var tex = ImageTexture.new()
 	tex.create_from_image(the_image)
-	tex.flags ^= Texture.FLAG_FILTER
+	tex.flags = Texture.FLAG_REPEAT
 	return tex
 
 func gen_chunck_data():

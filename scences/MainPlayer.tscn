@@ -104,7 +104,6 @@ script = ExtResource( 1 )
 
 [node name="Camera" type="Camera" parent="."]
 cull_mask = 1048569
-far = 1000.0
 
 [node name="Head" type="MeshInstance" parent="."]
 transform = Transform( 0.646613, 0, 0, 0, -1.0896e-07, -0.66879, 0, 0.575779, -9.38065e-08, 0, -0.887515, 0 )
