@@ -386,6 +386,7 @@ func gen_mesh_from_chunck_data():
 																		is_not_solid_block(x, y, z-1))
 					
 					
+	mesh_tool.generate_normals()
 	return mesh_tool.commit()
 
 func gen_chunck_collision_node(mesh:Mesh):

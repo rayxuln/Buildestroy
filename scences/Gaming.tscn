@@ -79,8 +79,8 @@ scroll_following = true
 __meta__ = {
 "_edit_use_anchors_": false
 }
-[connection signal="pressed" from="Control/MainMenu/StartServerButton" to="Control/MainMenu" method="_on_StartServerButton_pressed"]
 [connection signal="pressed" from="Control/MainMenu/StartServerButton" to="." method="_on_StartServerButton_pressed"]
-[connection signal="pressed" from="Control/MainMenu/StartClientButton" to="Control/MainMenu" method="_on_StartClientButton_pressed"]
+[connection signal="pressed" from="Control/MainMenu/StartServerButton" to="Control/MainMenu" method="_on_StartServerButton_pressed"]
 [connection signal="pressed" from="Control/MainMenu/StartClientButton" to="." method="_on_StartClientButton_pressed"]
+[connection signal="pressed" from="Control/MainMenu/StartClientButton" to="Control/MainMenu" method="_on_StartClientButton_pressed"]
 [connection signal="text_entered" from="Control/ChatPanel/LineEdit" to="." method="_on_LineEdit_text_entered"]

@@ -14,6 +14,7 @@ block_material = SubResource( 1 )
 
 [node name="OmniLight" type="OmniLight" parent="."]
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 2.83447, 9.625 )
+layers = 7
 light_energy = 2.8
 light_indirect_energy = 3.05
 light_bake_mode = 0
