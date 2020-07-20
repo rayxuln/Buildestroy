@@ -10,8 +10,6 @@
 script = ExtResource( 1 )
 block_material = SubResource( 1 )
 
-[node name="ChunkMeshInstance" type="MeshInstance" parent="."]
-
 [node name="OmniLight" type="OmniLight" parent="."]
 transform = Transform( 1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 2.83447, 9.625 )
 layers = 7

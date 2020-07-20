@@ -55,6 +55,7 @@ func init_client_network_peer():
 func load_world():
 	the_world = WorldScene.instance()
 	add_child(the_world)
+	the_world.game_system = self
 
 func create_main_player():
 	the_player = MainPlayer.instance()
@@ -63,6 +64,7 @@ func create_main_player():
 	the_player.set_network_master(the_player.peer_id)
 	the_player.world_camera.make_current()
 	the_player.enable = true
+	the_player.global_transform.origin = Vector3(5, 5, 5)
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
 func pause(v = true):
@@ -117,6 +119,7 @@ func _on_network_peer_connected(id):
 	print(id, " has conneted!")
 	if get_tree().is_network_server():
 		peer_id_list.append(id)
+		the_world.remote_init_chuncks(id)
 		rpc("add_dummy_player", id)
 		rpc_id(id, "add_dummy_players_with", peer_id_list)
 

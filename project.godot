@@ -8,9 +8,20 @@
 
 config_version=4
 
-_global_script_classes=[  ]
+_global_script_classes=[ {
+"base": "Object",
+"class": "BlockType",
+"language": "GDScript",
+"path": "res://scences/BlockType.gd"
+}, {
+"base": "Object",
+"class": "RaiixMathUtil",
+"language": "GDScript",
+"path": "res://scences/RaiixMathUtil.gd"
+} ]
 _global_script_class_icons={
-
+"BlockType": "",
+"RaiixMathUtil": ""
 }
 
 [application]
@@ -103,6 +114,11 @@ build={
 jump={
 "deadzone": 0.5,
 "events": [ Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":0,"alt":false,"shift":false,"control":false,"meta":false,"command":false,"pressed":false,"scancode":32,"unicode":0,"echo":false,"script":null)
+ ]
+}
+reset={
+"deadzone": 0.5,
+"events": [ Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":0,"alt":false,"shift":false,"control":false,"meta":false,"command":false,"pressed":false,"scancode":82,"unicode":0,"echo":false,"script":null)
  ]
 }
 

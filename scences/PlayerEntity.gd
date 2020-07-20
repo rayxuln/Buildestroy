@@ -24,7 +24,8 @@ func _on_peer_id_set(v):
 func _on_peer_id_get():
 	return peer_id
 
-onready var anim_playback = $AnimationTree["parameters/playback"]	
+onready var anim_playback = $AnimationTree["parameters/playback"]
+onready var body_anim_playback = $Body/AnimationTree["parameters/playback"]
 onready var world_camera = $Body/HeadJoint/Camera
 onready var first_person_view_camera = $Body/HeadJoint/FirstPersonViewport/Camera
 
@@ -50,6 +51,35 @@ func _input(event):
 		rotation_degrees.y += rad2deg(-input_vec.x * mouse_sensity * MOUSE_SENSITY_CORRECTION_FACTOR)
 
 func _process(delta):
+	var is_master = is_network_master()
+	$Cursor.visible = is_master
+	$FirstPersonViewSprite.visible = is_master
+	if not is_master:
+		$Body/Body.layers = 1
+		$Body/HeadJoint/Head.layers = 1
+		$Body/LeftHandJoint/LeftHand.layers = 1
+		$Body/RightHandJoint/RightHand.layers = 1
+		$Body/LeftLegJoint/LeftLeg.layers = 1
+		$Body/RightLegJoint/RightLeg.layers = 1
+		
+		$Body/HeadJoint/FirstPersonViewMainHand.layers = 0
+		
+		$BlockSelectionWireframeMesh.visible = false
+	else:
+		$Body/Body.layers = 2
+		$Body/HeadJoint/Head.layers = 2
+		$Body/LeftHandJoint/LeftHand.layers = 2
+		$Body/RightHandJoint/RightHand.layers = 2
+		$Body/LeftLegJoint/LeftLeg.layers = 2
+		$Body/RightLegJoint/RightLeg.layers = 2
+		
+		$Body/HeadJoint/FirstPersonViewMainHand.layers = 4
+	
+	if velocity.length() > 0.1:
+		body_anim_playback.travel("walk")
+	else:
+		body_anim_playback.travel("idle")
+	
 	if not enable:
 		return
 	if Input.is_action_just_pressed("sprint"):
@@ -68,6 +98,9 @@ func _process(delta):
 	
 	if Input.is_action_just_pressed("build"):
 		anim_playback.travel("hand_swing")
+	
+	if Input.is_action_just_pressed("reset"):
+		global_transform.origin = Vector3(5, 5, 5)
 	
 	$Cursor.position = get_viewport().size/2
 	world_camera.fov = lerp(world_camera.fov, target_fov, 0.3)
@@ -105,16 +138,17 @@ func _physics_process(delta):
 		
 		var block = get_parent().get_block_by_world_position_and_face_normal(cpos, cnor)
 		
-		if block and get_parent().block_data[block.name].type == get_parent().BlockType.SOLID:
+		if block and get_parent().block_data[block.name].type == BlockType.SOLID:
+			var block_pos = block.pos + BlockType.convert_to_world_pos(block.chunck_pos)
 			$BlockSelectionWireframeMesh.global_transform = Transform.IDENTITY
-			$BlockSelectionWireframeMesh.global_transform.origin = block.pos
+			$BlockSelectionWireframeMesh.global_transform.origin = block_pos
 			$BlockSelectionWireframeMesh.visible = true
 			
 			if Input.is_action_just_pressed("destroy"):
-				get_parent().destroy_block(block.pos)
+				get_parent().destroy_block(block_pos)
 			
 			if Input.is_action_just_pressed("build"):
-				get_parent().build_block(block.pos+cnor, "stone")
+				get_parent().build_block(block_pos+cnor, "stone")
 
 	
 #--------- Methods ------------------
@@ -123,9 +157,12 @@ func _physics_process(delta):
 #---------- RPC ---------------------
 puppet func sync_transform(t):
 	global_transform = t
+puppet func sync_velocity(v):
+	velocity = v
 
 #--------- Signals ------------------
 func _on_SyncTimer_timeout():
 	#if get_tree().get_network_unique_id() == peer_id:
 	if is_network_master():
 		rpc_unreliable("sync_transform", global_transform)
+		rpc_unreliable("sync_velocity", velocity)

@@ -3,50 +3,49 @@ extends Spatial
 export(Dictionary) var block_data:Dictionary
 export(SpatialMaterial) var block_material:SpatialMaterial
 
-const chunck_size = Vector3(16, 256, 16)
-var chunck_data
+export(int) var view_distance = 4
 
-# multi-thread update mesh
-var expect_thread_id = -1
-var ready_mesh:ArrayMesh = null
-var ready_mesh_thread_id:int = -1
-var update_mesh_mutex:Mutex = Mutex.new()
-var thread_id_cnt = 0
-var threads:Array = []
+var game_system:Node = null
+
 
 func _ready():
 	if block_material == null:
 		block_material = SpatialMaterial.new()
 		
 	register_blocks()
-	
 	block_material.albedo_texture = gen_texutre()
+	
+	if get_tree().is_network_server():
+		load_chunck(Vector2.ZERO)
 
-	gen_chunck_data()
-	
-	var mesh:ArrayMesh = gen_mesh_from_chunck_data()
-	$ChunkMeshInstance.mesh = mesh
-	mesh.surface_set_material(0, block_material)
-	$ChunkMeshInstance.transform.origin = Vector3(0, 0, 0)
-	
-	var chunck_collision = gen_chunck_collision_node(mesh)
-	$ChunkMeshInstance.add_child(chunck_collision)
 	
 func _process(delta):
-	if ready_mesh != null and $ChunkMeshInstance.mesh != ready_mesh:
-		$ChunkMeshInstance.mesh = ready_mesh
-		ready_mesh.surface_set_material(0, block_material)
-		update_chunck_collision()
-		ready_mesh = null
-
-func _exit_tree():
-	for t in threads:
-		if t is Thread:
-			t.wait_to_finish()
+	if not get_tree().is_network_server():
+		return
+	if game_system:
+		var player = game_system.the_player
+		if player:
+			var player_pos = player.global_transform.origin
+			var chunck_pos = Vector2(floor(player_pos.x/BlockType.chunck_size.x), floor(player_pos.z/BlockType.chunck_size.z))
+			chunck_pos -= Vector2(view_distance/2, view_distance/2)
+			for offset_x in view_distance:
+				for offset_y in view_distance:
+					var offset = Vector2(offset_x, offset_y)
+					var pos = chunck_pos + offset
+					var chunck_name = BlockType.make_chunck_name(pos)
+					if not has_node(chunck_name):
+						#load_chunck(pos)
+						rpc("load_chunck", pos)
 #------- Enums -------------
-enum BlockType{AIR, HALF_SOLID, SOLID}
 
 #------- Methods -------------
+func remote_init_chuncks(id):
+	var chunck_pos_list = []
+	var chuncks = get_tree().get_nodes_in_group("chunck")
+	for c in chuncks:
+		chunck_pos_list.append([BlockType.convert_to_chunck_pos(c.global_transform.origin), null])
+	rpc_id(id, "_init_chuncks", chunck_pos_list)
+
 func gen_normal_solid_cube_block_uvs_data():
 	var su = 1.0/6.0
 	return {
@@ -76,17 +75,6 @@ func register_blocks():
 		"tex": preload("res://aseprites/stone_block_texture.png"),
 		"uvs": gen_normal_solid_cube_block_uvs_data()
 		}
-
-func create_block(block_name, x, y, z):
-	return {"name": block_name, "pos": Vector3(x, y, z)}
-	
-
-func is_rect_overlap(r1:Rect2, r2:Rect2):
-	return (is_in_range(r1.position.x, r2.position.x, r2.end.x, true) \
-			or is_in_range(r1.end.x, r2.position.x, r2.end.x, true))  \
-			and (is_in_range(r1.position.y, r2.position.y, r2.end.y, true)  \
-			or is_in_range(r1.end.y, r2.position.y, r2.end.y, true))
-			
 
 func gen_texutre():
 	var USED = 1
@@ -134,7 +122,7 @@ func gen_texutre():
 						for tx in ts.x:
 							for ty in ts.y:
 #								print(bd["name"], " tx:", tx, " ty:", ty)
-								if not is_in_range(x+tx, 0, units_num.x) or not is_in_range(y+ty, 0, units_num.y) or units_used[x+tx][y+ty] == USED:
+								if not RaiixMathUtil.is_in_range(x+tx, 0, units_num.x) or not RaiixMathUtil.is_in_range(y+ty, 0, units_num.y) or units_used[x+tx][y+ty] == USED:
 									available = false
 									break
 						if not available:
@@ -161,292 +149,36 @@ func gen_texutre():
 	tex.flags = Texture.FLAG_REPEAT
 	return tex
 
-func gen_chunck_data():
-	chunck_data = [] # chunck_data[x][y][z]
-	
-	for x in chunck_size.x:
-		var chunck_data_x = []
-		for y in chunck_size.y:
-			var chunck_data_y = []
-			for z in chunck_size.z:
-				chunck_data_y.append(create_block("air", x, y, z))
-			chunck_data_x.append(chunck_data_y)
-		chunck_data.append(chunck_data_x)
-	
-	for x in chunck_size.x:
-		for z in chunck_size.z:
-			chunck_data[x][0][z] = create_block("stone", x, 0, z)
-	
-	for x in chunck_size.x:
-		for z in chunck_size.z:
-			chunck_data[x][1][z] = create_block("dirt", x, 1, z)
-	
-	chunck_data[4][2][11] = create_block("stone", 4, 2, 11) 
+func destroy_block(pos:Vector3):
+	#set_block(pos, "air")
+	rpc("set_block", pos, "air")
 
-func add_cube_mesh(mesh_tool:SurfaceTool, trans:Transform, base_index, block_data, up=true, down=true, left=true, right=true, front=true, back=true):
-	if not up and not down and not left and not right and not front and not back:
-		return base_index
-	
-	var uvs = block_data["uvs"]
-	var sf = uvs["scale_factor"]
-	if up:#0
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["up"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
-		
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["up"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
-		
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["up"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
-		
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["up"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
-		
-		mesh_tool.add_index(base_index+0)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+2)
-		
-		mesh_tool.add_index(base_index+0)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+3)
-		
-		base_index += 4
-	if down:#4
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["down"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["down"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["down"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["down"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
-
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+0)
-
-		mesh_tool.add_index(base_index+3)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+0)
-		base_index += 4
-	if left:#8
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["left"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["left"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["left"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["left"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
-
-		mesh_tool.add_index(base_index+0)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+3)
-
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+3)
-
-		base_index += 4
-	if right:#12
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["right"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["right"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["right"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["right"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
-
-		mesh_tool.add_index(base_index+3)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+0)
-
-		mesh_tool.add_index(base_index+3)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+1)
-
-		base_index += 4
-	if front:#16
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["front"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["front"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["front"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 1)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["front"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 1)))
-
-		mesh_tool.add_index(base_index+0)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+3)
-
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+3)
-
-		base_index += 4
-	if back:#20
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["back"][0]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 0, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["back"][1]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(0, 1, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["back"][2]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 1, 0)))
-
-		mesh_tool.add_color(Color.white)
-		mesh_tool.add_uv(uvs["offset"]+uvs["back"][3]*sf)
-		mesh_tool.add_vertex(trans.xform(Vector3(1, 0, 0)))
-
-		mesh_tool.add_index(base_index+3)
-		mesh_tool.add_index(base_index+1)
-		mesh_tool.add_index(base_index+0)
-
-		mesh_tool.add_index(base_index+3)
-		mesh_tool.add_index(base_index+2)
-		mesh_tool.add_index(base_index+1)
-		
-		base_index += 4
-	return base_index
-
-
-func is_in_range(x, min_x, max_x, closed = false):
-	if not closed:
-		return x >= min_x and x < max_x
-	return x >= min_x and x <= max_x
-
-func is_valid_position_in_chunck(pos:Vector3):
-	return is_in_range(pos.x, 0,chunck_size.x) and is_in_range(pos.y, 0,chunck_size.y) and is_in_range(pos.z, 0,chunck_size.z)
-
-func chunck_data_get_block(x:int, y:int, z:int):
-	if not is_valid_position_in_chunck(Vector3(x, y, z)):
-		return null
-	return chunck_data[x][y][z]
-
-func is_not_solid_block(x, y, z):
-	var res = chunck_data_get_block(x, y, z)
-	if res == null:
-		return true
-	return block_data[res["name"]]["type"] != BlockType.SOLID
-
-func gen_mesh_from_chunck_data():
-	var mesh_tool = SurfaceTool.new()
-	mesh_tool.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var trans = Transform.IDENTITY
-	var base_index = 0
-	for x in chunck_size.x:
-		for y in chunck_size.y:
-			for z in chunck_size.z:
-				var block = chunck_data_get_block(x, y, z)
-				if block != null and block["name"] != "air":
-					trans.origin = Vector3(x, y, z)
-					base_index = add_cube_mesh(mesh_tool, trans, base_index, block_data[block["name"]],
-																		is_not_solid_block(x, y+1, z),
-																		is_not_solid_block(x, y-1, z),
-																		is_not_solid_block(x-1, y, z),
-																		is_not_solid_block(x+1, y, z),
-																		is_not_solid_block(x, y, z+1),
-																		is_not_solid_block(x, y, z-1))
-					
-					
-	mesh_tool.generate_normals()
-	return mesh_tool.commit()
-
-func gen_chunck_collision_node(mesh:Mesh):
-	var shape = mesh.create_trimesh_shape()
-	if shape == null:
-		print("generate chunck collision fail!")
-		return
-	
-	var static_body = StaticBody.new()
-	static_body.name = "ChunckStaticBody"
-	
-	var collision_shape = CollisionShape.new()
-	static_body.add_child(collision_shape)
-	collision_shape.name = "Shape"
-	collision_shape.shape = shape
-	
-	return static_body
-
-func update_chunck_mesh():
-	ready_mesh_thread_id = thread_id_cnt
-	update_mesh_mutex.lock()
-	ready_mesh = null
-	update_mesh_mutex.unlock()
-	var t = Thread.new()
-	t.start(self, "_thread_update_chunck_mesh", thread_id_cnt)
-	thread_id_cnt += 1
-	threads.append(t)
-
-func _thread_update_chunck_mesh(thread_id):
-	var mesh:ArrayMesh = gen_mesh_from_chunck_data()
-	if ready_mesh_thread_id == thread_id:
-		update_mesh_mutex.lock()
-		ready_mesh = mesh
-		update_mesh_mutex.unlock()
-
-func update_chunck_collision():
-	var shape = $ChunkMeshInstance.mesh.create_trimesh_shape()
-	if shape == null:
-		print("generate chunck collision fail!")
-		return
-	$ChunkMeshInstance.get_node("ChunckStaticBody/Shape").shape = shape
-
-func set_block(pos_in_chunck:Vector3, block_name):
-	if not is_valid_position_in_chunck(pos_in_chunck):
-		return
-	chunck_data[pos_in_chunck.x][pos_in_chunck.y][pos_in_chunck.z] = create_block(block_name, pos_in_chunck.x, pos_in_chunck.y, pos_in_chunck.z)
-	
-	update_chunck_mesh()
-
-func destroy_block(pos_in_chunck:Vector3):
-	set_block(pos_in_chunck, "air")
-
-func build_block(pos_in_chunck:Vector3, block_name):
-	set_block(pos_in_chunck, block_name)
+func build_block(pos:Vector3, block_name):
+	#set_block(pos, block_name)
+	rpc("set_block", pos, block_name)
 
 func get_block_by_world_position_and_face_normal(pos:Vector3, nor:Vector3):
-	pos -= nor * 0.01
-	return chunck_data_get_block(pos.x, pos.y, pos.z)
+	var chunck_pos = BlockType.convert_to_chunck_pos(pos)
+	var chunck = get_node_or_null(BlockType.make_chunck_name(chunck_pos))
+	if chunck:
+		return chunck.get_block_by_world_position_and_face_normal(pos-chunck.global_transform.origin, nor)
+	return null
 	
 #------- RPCs -------------
+remote func _init_chuncks(chunck_pos_list:Array):
+	for p in chunck_pos_list:
+		load_chunck(p[0], p[1])
 
+remotesync func load_chunck(chunck_pos:Vector2, chunck_data=null):
+	var chunck = preload("res://scences/Chunk.gd").new()
+	add_child(chunck)
+	chunck.add_to_group("chunck")
+	chunck.init(block_material, block_data, chunck_pos, chunck_data)
+
+remotesync func set_block(pos:Vector3, block_name):
+	var chunck_pos = BlockType.convert_to_chunck_pos(pos)
+	var chunck = get_node_or_null(BlockType.make_chunck_name(chunck_pos))
+	if chunck:
+		chunck.set_block(pos-chunck.global_transform.origin, block_name)
 #------- Signals -------------
 

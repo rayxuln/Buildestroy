@@ -30,7 +30,7 @@ func _ready():
 	mesh = mesh_tool.commit()
 	var mat = SpatialMaterial.new()
 	mat.flags_unshaded = true
-	mat.params_cull_mode = SpatialMaterial.CULL_DISABLED
+#	mat.params_cull_mode = SpatialMaterial.CULL_DISABLED
 	mat.params_line_width = 2
 	mat.albedo_color = Color.black
 	mesh.surface_set_material(0, mat)
