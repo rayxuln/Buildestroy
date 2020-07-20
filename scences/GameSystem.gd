@@ -61,7 +61,7 @@ func create_main_player():
 	the_world.add_child(the_player)
 	the_player.peer_id = get_tree().get_network_unique_id()
 	the_player.set_network_master(the_player.peer_id)
-	the_player.get_node("Camera").make_current()
+	the_player.world_camera.make_current()
 	the_player.enable = true
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
 
